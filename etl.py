@@ -5,9 +5,12 @@ tables.
 This file can also be imported as a module and contains the following
 functions:
 
-    * process_song_file - Processing Song file and load data 
-    * process_log_file - Processing Song file and load data
-    * process_data - IIterating all files with in a directory
+    * process_i94_code_file - Processing dimensions of I94 file. 
+    * process_temperature_file - Processing temperature file and load data
+    * process_i94_file - Processing Immigration data and load
+    * validate_data - Validate data from the stage table
+    * populate_table - Populate Fact tables
+    * data_quality_check - Perform data Quality checks 
     * main - the main function of the script
 """
 
@@ -39,16 +42,16 @@ def process_i94_code_file(cur, filename, code_type):
         None
     """
     
-    # open I94 Country Code file
+    # open I94 Code file
     df = pd.read_csv(filename, sep='=', quotechar="'", skipinitialspace = True, header=None)
     
-    # Insert I94 coutry code
+    # Insert I94 code data
     code_df = df[[0,1]]
     for i, row in code_df.iterrows():
         cur.execute(code_type, row)
 
 def process_temperature_file(cur, filename, code_type):
-    """Processing I94 data file and loading data into Dimensions. 
+    """Processing tempearature file and loading data into Fact. 
     
     Parameters
     ___________
@@ -63,13 +66,18 @@ def process_temperature_file(cur, filename, code_type):
         None
     """
 
-    # Reading SAS file
+    # Reading CVS file
     df = pd.read_csv(filename)
+    
+    # Filtering data for US country as Imiigration data is from US
     df = df[df['Country']=="United States"]
     df = df.head(20000)
+    
     # Populating Temperature data
     temperature_data = df[['dt','AverageTemperature','AverageTemperatureUncertainty','City','Country',\
                          'Latitude','Longitude']]
+    
+    # Inserting records
     for i, row in temperature_data.iterrows():
         cur.execute(code_type, row)
         
@@ -103,8 +111,8 @@ def process_i94_file(cur, filename, code_type):
     for i, row in I94_data.iterrows():
         cur.execute(code_type, row)
 
-def valid_data(cur,conn):
-    """Creating tables in Database. 
+def validate_data(cur,conn):
+    """Check valid data in table 
     
     Parameters 
     ___________
@@ -115,9 +123,10 @@ def valid_data(cur,conn):
     
     Returns 
     ___________
-        data_validated_flag : Y/N
+        None
     """
     
+    # Execute query for data validation
     for query in clean_table_queries:
         cur.execute(query)
         conn.commit()
@@ -141,7 +150,7 @@ def populate_tables(cur, conn):
         cur.execute(query)
         conn.commit()
 
-def validate_data(cur, conn, table_name, no_rec):
+def data_quality_check(cur, conn, table_name, no_rec):
     """Validating data in tables  
     
     Parameters 
@@ -160,12 +169,11 @@ def validate_data(cur, conn, table_name, no_rec):
     
     sql_query = "SELECT count(*) FROM " + table_name 
     cur.execute(sql_query)
-    row = cur.fetchall()
-    print(row[0])
-    if row[0] >= no_rec :
-        return Y
+    tot_rec = cur.fetchone()
+    if tot_rec[0] >= no_rec:
+        return 'Y'
     else:
-        return N
+        return 'N'
     
 def main():
     
@@ -189,13 +197,13 @@ def main():
     # Processing I94 Immigration data and inserting into Dimension
     process_i94_file(cur, config.sas_file_path + 'i94_apr16_sub.sas7bdat', I94_immigration_stg_table_insert)
     
-    # Processing I94 Immigration data and inserting into Dimension
+    # Processing Temperature data and inserting into Dimension
     process_temperature_file(cur, 'GlobalLandTemperaturesByCity.csv',\
                              city_temperature_table_insert)
     
-    # Populate tables
+    # Validate tables
     try:
-        valid_data(cur, conn)
+        validate_data(cur, conn)
     except Exception as e:
         print("Error while validating data; error message " + str(e))
         cur.close()
@@ -211,15 +219,22 @@ def main():
         conn.close()
         sys.exit(1)
         
-    # Validating Data
+    # Data Quality Checks
     try:
-        validated = validate_data(cur, conn, "I94_immigration_data", 1)
+        validated = data_quality_check(cur, conn, "I94_immigration_data", 1)
         
         if validated =='N':
-            print("Data validation Failed")
+            print("Data validation Failed for I94 Immigration data")
         else:
-            print("Data validation Passed")
+            print("Data validation Passed for I94 Immigration data")
         
+        validated = data_quality_check(cur, conn, "city_temperature_data", 10)
+        
+        if validated =='N':
+            print("Data validation Failed for temperature data")
+        else:
+            print("Data validation Passed for temperature data")
+            
     except Exception as e:
         print("Error while validating tables; error message " + str(e))
         cur.close()
