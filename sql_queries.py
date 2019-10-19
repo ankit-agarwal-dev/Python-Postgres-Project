@@ -8,10 +8,10 @@ I94_address_desc_table_drop = "drop table if exists I94_address_desc_dim;"
 I94_airport_desc_table_drop = "drop table if exists I94_airport_desc_dim;"
 I94_travel_mode_table_drop = "drop table if exists I94_travel_mode_dim;"
 I94_immigration_stg_table_drop = "drop table if exists I94_immigration_data_stg;"
-city_temperature_table_drop = "drop table if exists city_temperature_data;"
+city_temperature_table_drop = "drop table if exists city_temperature_data_fact;"
 time_dim_table_drop =  "drop table if exists time_dim;"
 person_dim_table_drop = "drop table if exists person_dim;"
-I94_immigration_table_drop = "drop table if exists I94_immigration_data;"
+I94_immigration_table_drop = "drop table if exists I94_immigration_data_fact;"
 
 # CREATE FACT AND DIMENSION TABLES QUERIES
 I94_country_desc_table_create = ("""create table if not exists I94_country_desc_dim
@@ -71,9 +71,9 @@ visatype varchar(20),
 valid_yn_flag char(1) 
 );""")
 
-I94_immigration_table_create = ("""create table if not exists I94_immigration_data
+I94_immigration_table_create = ("""create table if not exists I94_immigration_data_fact
 (
-cicid integer,
+cicid integer primary key,
 i94cit integer,
 i94res integer,
 i94port varchar(5),
@@ -104,7 +104,7 @@ bithyear int,
 age int
 );""")
 
-city_temperature_table_create = ("""create table if not exists city_temperature_data
+city_temperature_table_create = ("""create table if not exists city_temperature_data_fact
 (
 dt date,
 AverageTemperature float,
@@ -112,7 +112,8 @@ AverageTemperatureUncertainty float,
 City varchar(50),
 Country varchar(50),
 Latitude varchar(20),
-Longitude varchar(20)
+Longitude varchar(20),
+PRIMARY KEY (dt,City,Country)
 );""")
 
 # INSERT RECORDS
@@ -194,16 +195,18 @@ from
 select distinct cast(cast(arrdate as DOUBLE PRECISION) as integer) sas_date,
 TO_DATE('01-01-1960','dd-mm-yyyy') + cast(cast(arrdate as DOUBLE PRECISION) as integer) formatted_date
 from I94_immigration_data_stg
+where valid_yn_flag ='Y'
 union
 select distinct cast(cast(depdate as double precision) as integer) sas_date,
 TO_DATE('01-01-1960','dd-mm-yyyy') + cast(cast(depdate as double precision) as integer) formatted_date
 from I94_immigration_data_stg
 where depdate <> ''
+and valid_yn_flag ='Y'
 ) as a
 ON CONFLICT DO NOTHING
 ;""")
 
-I94_immigration_table_insert = ("""insert into I94_immigration_data
+I94_immigration_table_insert = ("""insert into I94_immigration_data_fact
 (
 cicid,
 i94cit,
@@ -255,7 +258,7 @@ set valid_yn_flag = 'Y'
 where i94port in (select distinct airport_code from I94_airport_desc_dim)
 ;""")
 
-city_temperature_table_insert = ("""insert into city_temperature_data
+city_temperature_table_insert = ("""insert into city_temperature_data_fact
 (
 dt,
 AverageTemperature,
