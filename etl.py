@@ -101,7 +101,7 @@ def process_i94_file(cur, filename, code_type):
     df = pd.read_sas(filename, 'sas7bdat', encoding="ISO-8859-1")
     df = df.replace('\x00', '', regex=True)
     df = df.replace(np.NaN, '', regex=True)
-    few_data = df.head(2000)
+    few_data = df.head(4000)
     # Populating Time Dimension
     I94_data = few_data[['cicid','i94yr','i94mon','i94cit','i94res','i94port',\
                    'arrdate','i94mode','i94addr','depdate','i94bir','i94visa',\
@@ -221,14 +221,14 @@ def main():
         
     # Data Quality Checks
     try:
-        validated = data_quality_check(cur, conn, "I94_immigration_data", 1)
+        validated = data_quality_check(cur, conn, "I94_immigration_data_fact", 2000)
         
         if validated =='N':
             print("Data validation Failed for I94 Immigration data")
         else:
             print("Data validation Passed for I94 Immigration data")
         
-        validated = data_quality_check(cur, conn, "city_temperature_data", 10)
+        validated = data_quality_check(cur, conn, "city_temperature_data_fact", 2000)
         
         if validated =='N':
             print("Data validation Failed for temperature data")
